@@ -1,0 +1,158 @@
+version: "3.9"
+
+services:
+  # ============================================
+  # PostgreSQL Database
+  # ============================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: forgemind-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-forgemind}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-forgemind_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-forgemind}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-forgemind}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================
+  # Redis (Celery Broker + Event Bus)
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: forgemind-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================
+  # MinIO (S3-compatible Object Storage)
+  # ============================================
+  minio:
+    image: minio/minio:latest
+    container_name: forgemind-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-forgemind}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-forgemind_secret}
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================
+  # MLflow Tracking Server
+  # ============================================
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.16.0
+    container_name: forgemind-mlflow
+    restart: unless-stopped
+    environment:
+      MLFLOW_BACKEND_STORE_URI: postgresql://${POSTGRES_USER:-forgemind}:${POSTGRES_PASSWORD:-forgemind_secret}@postgres:5432/${POSTGRES_DB:-forgemind}
+      MLFLOW_DEFAULT_ARTIFACT_ROOT: s3://mlflow-artifacts
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-forgemind}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-forgemind_secret}
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+    command: >
+      mlflow server
+        --host 0.0.0.0
+        --port 5000
+        --backend-store-uri postgresql://${POSTGRES_USER:-forgemind}:${POSTGRES_PASSWORD:-forgemind_secret}@postgres:5432/${POSTGRES_DB:-forgemind}
+        --default-artifact-root s3://mlflow-artifacts
+    ports:
+      - "5000:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  # ============================================
+  # FastAPI Application
+  # ============================================
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: forgemind-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # ============================================
+  # Celery Worker
+  # ============================================
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: forgemind-worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=2
+
+  # ============================================
+  # Ollama (Local LLM Backend — Phase 2)
+  # ============================================
+  ollama:
+    image: ollama/ollama:latest
+    container_name: forgemind-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          memory: 4G
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+  ollama_data:
+

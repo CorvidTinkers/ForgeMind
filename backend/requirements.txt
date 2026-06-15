@@ -1,0 +1,52 @@
+# ============================================
+# ForgeMind Phase 1: Dependencies
+# ============================================
+
+# Web Framework
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+
+# ORM & Database
+sqlalchemy[asyncio]==2.0.36
+psycopg2-binary==2.9.10
+alembic==1.14.1
+
+# Validation
+pydantic==2.10.4
+pydantic-settings==2.7.1
+
+# Object Storage (MinIO / S3)
+minio==7.2.12
+
+# Async Task Queue
+celery==5.4.0
+redis==5.2.1
+
+# AI / ML - Language Detection
+fasttext-wheel==0.9.2
+
+# AI / ML - Embeddings & Semantic Classification
+sentence-transformers==3.3.1
+
+# AI / ML - Vector Store
+faiss-cpu==1.9.0.post1
+
+# AI / ML - Experiment Tracking (mocked in Phase 1)
+mlflow==2.19.0
+
+# File Parsing
+PyPDF2==3.0.1
+pandas==2.2.3
+
+# NLP Utilities
+spacy==3.8.3
+
+# Testing
+pytest==8.3.4
+pytest-asyncio==0.25.0
+httpx==0.28.1
+
+# Utilities
+python-dotenv==1.0.1
+structlog==24.4.0
