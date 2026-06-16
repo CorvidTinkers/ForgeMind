@@ -17,6 +17,9 @@ from app.infrastructure.generation.base import GenerationClient, GenerationReque
 
 logger = logging.getLogger(__name__)
 
+# Prompt version — bump this whenever the prompt template changes.
+PROMPT_VERSION = "paraphrase_v1"
+
 PARAPHRASE_SYSTEM_PROMPT = (
     "You are a paraphrasing assistant. Rewrite the given text to create "
     "a semantically equivalent version with different wording and structure. "
@@ -96,9 +99,11 @@ class ParaphraseStrategy(AugmentationStrategy):
             generated_count=len(generated),
             failed_count=failed,
             audit_trail={
-                "prompt_template": "paraphrase_v1",
+                "prompt_version": PROMPT_VERSION,
+                "system_prompt_hash": hex(hash(PARAPHRASE_SYSTEM_PROMPT)),
                 "temperature": 0.8,
                 "generated_count": len(generated),
+                "failed_count": failed,
             },
         )
 

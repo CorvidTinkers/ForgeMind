@@ -17,6 +17,9 @@ from app.infrastructure.generation.base import GenerationClient, GenerationReque
 
 logger = logging.getLogger(__name__)
 
+# Prompt version — bump this whenever the prompt template changes.
+PROMPT_VERSION = "qa_expansion_v1"
+
 QA_SYSTEM_PROMPT = (
     "You are a dataset augmentation assistant specializing in question-answer pair generation. "
     "Given a context or existing Q&A pair, generate a NEW question-answer pair that is "
@@ -91,9 +94,11 @@ class QAGeneratorStrategy(AugmentationStrategy):
             generated_count=len(generated),
             failed_count=failed,
             audit_trail={
-                "prompt_template": "qa_expansion_v1",
+                "prompt_version": PROMPT_VERSION,
+                "system_prompt_hash": hex(hash(QA_SYSTEM_PROMPT)),
                 "temperature": 0.7,
                 "generated_count": len(generated),
+                "failed_count": failed,
             },
         )
 

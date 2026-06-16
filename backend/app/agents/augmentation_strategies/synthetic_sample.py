@@ -3,6 +3,9 @@ ForgeMind Synthetic Sample Strategy.
 
 Generates entirely new samples using domain metadata, knowledge
 extraction outputs, and dataset structure from Phase 1.
+
+Phase 2.1: Improved prompt templates with explicit grammar constraints
+and versioned prompt tracking for audit trails.
 """
 
 import json
@@ -16,11 +19,22 @@ from app.infrastructure.generation.base import GenerationClient, GenerationReque
 
 logger = logging.getLogger(__name__)
 
+# Prompt version — bump this whenever the prompt template changes.
+PROMPT_VERSION = "synthetic_sample_v2"
+
 SYNTHETIC_SYSTEM_PROMPT = (
     "You are a dataset generation assistant. Given a domain, topic keywords, "
     "and example structure, generate a completely NEW data sample that "
-    "matches the style and format of the examples. "
-    "Return ONLY valid JSON matching the provided structure."
+    "matches the style and format of the examples.\n\n"
+    "IMPORTANT RULES:\n"
+    "1. Return ONLY valid JSON matching the provided structure.\n"
+    "2. All instructions MUST be grammatically correct.\n"
+    "3. Use 'What' for concepts and things, 'Who' ONLY for people or organizations.\n"
+    "4. NEVER write 'Who is quantum computing?' or 'Who are computers?' — "
+    "these are grammatically incorrect.\n"
+    "5. Instructions should be clear questions or imperative commands.\n"
+    "6. Do NOT generate declarative statements as instructions.\n"
+    "7. Each generated sample must contain factually plausible content."
 )
 
 
@@ -89,16 +103,18 @@ class SyntheticSampleStrategy(AugmentationStrategy):
             generated_count=len(generated),
             failed_count=failed,
             audit_trail={
-                "prompt_template": "synthetic_sample_v1",
+                "prompt_version": PROMPT_VERSION,
+                "system_prompt_hash": hex(hash(SYNTHETIC_SYSTEM_PROMPT)),
                 "temperature": 0.9,
                 "generated_count": len(generated),
+                "failed_count": failed,
             },
         )
 
     def _build_prompt(
         self, source: dict, domain: str, keywords: list[str], structure: list[str]
     ) -> str:
-        """Build a synthetic generation prompt."""
+        """Build a synthetic generation prompt with grammar constraints."""
         example_json = json.dumps(
             {k: v for k, v in source.items() if isinstance(v, (str, int, float))},
             indent=2,
@@ -111,8 +127,13 @@ class SyntheticSampleStrategy(AugmentationStrategy):
             f"Keywords: {keywords_str}\n"
             f"Required fields: {structure}\n\n"
             f"Example sample:\n{example_json}\n\n"
-            f"Generate a completely NEW sample in the same format. "
-            f"Use different content but keep the same structure."
+            f"Generate a completely NEW sample in the same JSON format.\n"
+            f"Requirements:\n"
+            f"- Use different content but keep the same structure.\n"
+            f"- If the sample has an 'instruction' or 'question' field, "
+            f"it MUST be a grammatically correct question or imperative command.\n"
+            f"- Use 'What' for concepts, 'Who' only for people/organizations.\n"
+            f"- Do NOT generate declarative statements as instructions.\n"
         )
 
     def _infer_structure(self, samples: list[dict]) -> list[str]:

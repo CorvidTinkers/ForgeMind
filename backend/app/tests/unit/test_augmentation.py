@@ -133,7 +133,7 @@ class TestParaphraseStrategy:
         assert result.strategy_name == "paraphrase"
         assert result.generated_count == 3
         assert len(result.samples) == 3
-        assert result.audit_trail["prompt_template"] == "paraphrase_v1"
+        assert result.audit_trail["prompt_version"] == "paraphrase_v1"
 
     def test_paraphrase_empty_samples(self):
         strategy = ParaphraseStrategy()
@@ -258,15 +258,145 @@ class TestExportService:
 class TestQualityValidatorBasic:
     def test_empty_samples(self):
         validator = QualityValidator()
-        report = validator.validate([], [])
+        accepted, rejected, report = validator.validate([], [])
         assert report.total_samples == 0
+        assert accepted == []
+        assert rejected == []
 
     def test_non_empty_returns_report(self):
         validator = QualityValidator()
         generated = [{"text": "Sample text for testing quality."}]
         original = [{"text": "Original text for comparison."}]
-        report = validator.validate(generated, original)
+        accepted, rejected, report = validator.validate(generated, original)
         assert report.total_samples == 1
+        assert len(accepted) + len(rejected) == 1
+
+
+# ============================================
+# Instruction Sanity Validator Tests
+# ============================================
+
+class TestInstructionSanityValidator:
+    """Tests for the NLP-based instruction sanity checker."""
+
+    def setup_method(self):
+        from app.agents.augmentation_strategies.sanity_validator import (
+            InstructionSanityValidator,
+        )
+        self.validator = InstructionSanityValidator()
+
+    def test_valid_what_question(self):
+        samples = [{"instruction": "What is quantum computing?"}]
+        valid, rejected, report = self.validator.validate(samples)
+        assert len(valid) == 1
+        assert len(rejected) == 0
+
+    def test_valid_how_question(self):
+        samples = [{"instruction": "How does gravity work?"}]
+        valid, rejected, report = self.validator.validate(samples)
+        assert len(valid) == 1
+
+    def test_valid_imperative(self):
+        samples = [{"instruction": "Explain the theory of relativity."}]
+        valid, rejected, report = self.validator.validate(samples)
+        assert len(valid) == 1
+
+    def test_reject_who_inanimate(self):
+        """'Who is quantum computing?' must be rejected."""
+        samples = [{"instruction": "Who is quantum computing?"}]
+        valid, rejected, report = self.validator.validate(samples)
+        assert len(rejected) == 1
+        assert report.rejection_reasons.get("who_targets_inanimate", 0) >= 1
+
+    def test_reject_who_computers(self):
+        """'Who are computers?' must be rejected."""
+        samples = [{"instruction": "Who are computers?"}]
+        valid, rejected, report = self.validator.validate(samples)
+        assert len(rejected) == 1
+
+    def test_reject_declarative_statement(self):
+        """Declarative statements are not valid instructions."""
+        samples = [{"instruction": "AI has become more advanced in recent years."}]
+        valid, rejected, report = self.validator.validate(samples)
+        assert len(rejected) == 1
+        assert "declarative_not_instruction" in report.rejection_reasons
+
+    def test_reject_too_short(self):
+        samples = [{"instruction": "Hi?"}]
+        valid, rejected, report = self.validator.validate(samples)
+        assert len(rejected) == 1
+        assert "too_short" in report.rejection_reasons
+
+    def test_accept_who_person(self):
+        """'Who is Albert Einstein?' should pass."""
+        samples = [{"instruction": "Who is Albert Einstein?"}]
+        valid, rejected, report = self.validator.validate(samples)
+        assert len(valid) == 1
+
+    def test_mixed_batch(self):
+        """Test a batch with both valid and invalid instructions."""
+        samples = [
+            {"instruction": "What is gravity?"},
+            {"instruction": "Who is quantum computing?"},
+            {"instruction": "Explain AI."},
+            {"instruction": "AI is great."},
+        ]
+        valid, rejected, report = self.validator.validate(samples)
+        assert report.total_checked == 4
+        assert report.passed + report.failed == 4
+        assert report.failed >= 2  # at least the two bad ones
+
+    def test_rejected_examples_included(self):
+        samples = [{"instruction": "Who is quantum computing?"}]
+        valid, rejected, report = self.validator.validate(samples)
+        assert len(report.rejected_examples) >= 1
+        assert report.rejected_examples[0]["reason"] == "who_targets_inanimate"
+
+
+# ============================================
+# Validation Pipeline Tests
+# ============================================
+
+class TestValidationPipeline:
+    """Tests for the Sanity → Quality → Dedup pipeline."""
+
+    def test_empty_input(self):
+        from app.agents.augmentation_strategies.validation_pipeline import (
+            ValidationPipeline,
+        )
+        pipeline = ValidationPipeline()
+        result, report = pipeline.run([], [])
+        assert result == []
+        assert report.total_input == 0
+
+    def test_pipeline_filters_bad_instructions(self):
+        from app.agents.augmentation_strategies.validation_pipeline import (
+            ValidationPipeline,
+        )
+        pipeline = ValidationPipeline()
+        generated = [
+            {"instruction": "What is AI?", "output": "AI is artificial intelligence."},
+            {"instruction": "Who is quantum computing?", "output": "Something."},
+        ]
+        originals = [{"instruction": "What is ML?", "output": "Machine Learning."}]
+        result, report = pipeline.run(generated, originals)
+        # The bad instruction should be rejected
+        assert report.rejected_samples >= 1
+        assert "who_targets_inanimate" in report.rejection_reasons
+
+    def test_pipeline_report_structure(self):
+        from app.agents.augmentation_strategies.validation_pipeline import (
+            ValidationPipeline,
+        )
+        pipeline = ValidationPipeline()
+        generated = [{"text": "Valid text sample."}]
+        originals = [{"text": "Original text."}]
+        result, report = pipeline.run(generated, originals)
+        assert hasattr(report, "sanity_report")
+        assert hasattr(report, "quality_report")
+        assert hasattr(report, "deduplication_report")
+        assert hasattr(report, "rejection_reasons")
+        assert hasattr(report, "rejected_examples")
 
 
 # ============================================

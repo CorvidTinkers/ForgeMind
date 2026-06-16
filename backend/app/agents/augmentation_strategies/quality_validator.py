@@ -7,11 +7,12 @@ Scores generated content using embedding-based metrics:
 - Duplicate Score
 - Overall Quality Score
 
-Does NOT use subjective "hallucination scores" in Phase 2.
+Phase 2.1: Now also FILTERS samples below the similarity threshold,
+returning separate accepted/rejected lists with rejection reasons.
 """
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
@@ -33,16 +34,28 @@ class QualityReport:
     duplicate_score: float = 0.0
     quality_score: float = 0.0
     total_samples: int = 0
-    flagged_low_quality: int = 0
+    accepted_samples: int = 0
+    rejected_samples: int = 0
+    rejection_reasons: dict[str, int] = field(default_factory=dict)
+    rejected_examples: list[dict] = field(default_factory=list)
+
+    # Legacy alias for backward-compatibility
+    @property
+    def flagged_low_quality(self) -> int:
+        return self.rejected_samples
 
 
 class QualityValidator:
     """
     Embedding-based quality validator for augmented samples.
 
-    Uses sentence-transformers to compute quality metrics
-    without relying on subjective heuristics.
+    Uses sentence-transformers to compute quality metrics.
+    Phase 2.1: validates AND filters — rejected samples are removed
+    from the output, not just flagged.
     """
+
+    # Maximum rejected examples to include in reports.
+    MAX_REJECTED_EXAMPLES = 10
 
     def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
         self.model_name = model_name
@@ -60,9 +73,9 @@ class QualityValidator:
         generated_samples: list[dict],
         original_samples: list[dict],
         similarity_threshold: float = 0.3,
-    ) -> QualityReport:
+    ) -> tuple[list[dict], list[dict], QualityReport]:
         """
-        Validate the quality of generated samples against originals.
+        Validate and filter generated samples against originals.
 
         Args:
             generated_samples: The newly generated samples.
@@ -70,22 +83,26 @@ class QualityValidator:
             similarity_threshold: Minimum semantic similarity to originals.
 
         Returns:
-            QualityReport with computed metrics.
+            Tuple of (accepted_samples, rejected_samples, QualityReport).
         """
         if not generated_samples:
-            return QualityReport()
+            return [], [], QualityReport()
 
         gen_texts = self._extract_texts(generated_samples)
         orig_texts = self._extract_texts(original_samples)
 
         if not gen_texts:
-            return QualityReport(total_samples=len(generated_samples))
+            return generated_samples, [], QualityReport(
+                total_samples=len(generated_samples),
+                accepted_samples=len(generated_samples),
+            )
 
-        # Compute embeddings
+        # --- No model available: pass everything through ---
         if self.model is None:
             logger.warning("SentenceTransformer not available. Returning default scores.")
-            return QualityReport(
+            return generated_samples, [], QualityReport(
                 total_samples=len(generated_samples),
+                accepted_samples=len(generated_samples),
                 quality_score=0.5,
             )
 
@@ -102,16 +119,43 @@ class QualityValidator:
         # 2. Diversity among generated samples
         diversity = self._compute_diversity(gen_embeddings)
 
-        # 3. Duplicate score (proportion of near-duplicates within generated set)
+        # 3. Duplicate score
         dup_score = self._compute_duplicate_score(gen_embeddings)
 
-        # 4. Count low-quality samples
-        flagged = 0
+        # 4. Filter: reject samples below similarity threshold
+        accepted = []
+        rejected = []
+        rejection_reasons: dict[str, int] = {}
+        rejected_examples: list[dict] = []
+
         if orig_embeddings.size > 0:
-            for emb in gen_embeddings:
-                sim = np.dot(emb, orig_embeddings.T).max()
-                if sim < similarity_threshold:
-                    flagged += 1
+            gen_norm = gen_embeddings / (
+                np.linalg.norm(gen_embeddings, axis=1, keepdims=True) + 1e-9
+            )
+            orig_norm = orig_embeddings / (
+                np.linalg.norm(orig_embeddings, axis=1, keepdims=True) + 1e-9
+            )
+            sims = np.dot(gen_norm, orig_norm.T)
+
+            for idx, sample in enumerate(generated_samples):
+                max_sim = float(sims[idx].max()) if idx < len(sims) else 0.0
+                if max_sim < similarity_threshold:
+                    rejected.append(sample)
+                    reason = "low_semantic_similarity"
+                    rejection_reasons[reason] = rejection_reasons.get(reason, 0) + 1
+                    if len(rejected_examples) < self.MAX_REJECTED_EXAMPLES:
+                        rejected_examples.append({
+                            "sample": {
+                                k: v for k, v in sample.items()
+                                if isinstance(v, (str, int, float, bool))
+                            },
+                            "reason": reason,
+                            "similarity": round(max_sim, 4),
+                        })
+                else:
+                    accepted.append(sample)
+        else:
+            accepted = list(generated_samples)
 
         # 5. Overall quality: weighted combination
         quality_score = (
@@ -120,14 +164,27 @@ class QualityValidator:
             + 0.2 * (1.0 - dup_score)
         )
 
-        return QualityReport(
+        report = QualityReport(
             semantic_similarity=round(semantic_sim, 4),
             diversity_score=round(diversity, 4),
             duplicate_score=round(dup_score, 4),
             quality_score=round(quality_score, 4),
             total_samples=len(generated_samples),
-            flagged_low_quality=flagged,
+            accepted_samples=len(accepted),
+            rejected_samples=len(rejected),
+            rejection_reasons=rejection_reasons,
+            rejected_examples=rejected_examples,
         )
+
+        logger.info(
+            "Quality validation: total=%d, accepted=%d, rejected=%d, score=%.4f",
+            report.total_samples,
+            report.accepted_samples,
+            report.rejected_samples,
+            report.quality_score,
+        )
+
+        return accepted, rejected, report
 
     def _compute_semantic_similarity(
         self, gen_emb: np.ndarray, orig_emb: np.ndarray
@@ -136,7 +193,6 @@ class QualityValidator:
         if orig_emb.size == 0 or gen_emb.size == 0:
             return 0.0
 
-        # Normalize embeddings
         gen_norm = gen_emb / (np.linalg.norm(gen_emb, axis=1, keepdims=True) + 1e-9)
         orig_norm = orig_emb / (np.linalg.norm(orig_emb, axis=1, keepdims=True) + 1e-9)
 
@@ -152,7 +208,6 @@ class QualityValidator:
         norm = embeddings / (np.linalg.norm(embeddings, axis=1, keepdims=True) + 1e-9)
         sim_matrix = np.dot(norm, norm.T)
 
-        # Get upper triangle (excluding diagonal)
         n = len(sim_matrix)
         mask = np.triu(np.ones((n, n), dtype=bool), k=1)
         pairwise_sims = sim_matrix[mask]
@@ -160,7 +215,6 @@ class QualityValidator:
         if len(pairwise_sims) == 0:
             return 1.0
 
-        # Diversity = 1 - average similarity
         return float(1.0 - pairwise_sims.mean())
 
     def _compute_duplicate_score(

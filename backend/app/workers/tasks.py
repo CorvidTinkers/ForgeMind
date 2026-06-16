@@ -293,10 +293,15 @@ def run_augmentation_task(self, dataset_id: str, run_id: str) -> dict:
         aug_run.report = {
             "original_samples": report.original_samples,
             "generated_samples": report.generated_samples,
+            "accepted_samples": report.accepted_samples,
+            "rejected_samples": report.rejected_samples,
             "duplicates_removed": report.duplicates_removed,
             "final_samples": report.final_samples,
             "quality_score": report.quality_score,
             "strategies_used": report.strategies_used,
+            "rejection_reasons": report.rejection_reasons,
+            "rejected_examples": report.rejected_examples,
+            "sanity_report": report.sanity_report,
             "quality_report": report.quality_report,
             "deduplication_report": report.deduplication_report,
         }

@@ -213,10 +213,15 @@ class AugmentationReportResponse(BaseModel):
     run_id: uuid.UUID
     original_samples: int = 0
     generated_samples: int = 0
+    accepted_samples: int = 0
+    rejected_samples: int = 0
     duplicates_removed: int = 0
     final_samples: int = 0
     quality_score: float = 0.0
     strategies_used: list[dict[str, Any]] = Field(default_factory=list)
+    rejection_reasons: dict[str, int] = Field(default_factory=dict)
+    rejected_examples: list[dict[str, Any]] = Field(default_factory=list)
+    sanity_report: dict[str, Any] = Field(default_factory=dict)
     quality_report: dict[str, Any] = Field(default_factory=dict)
     deduplication_report: dict[str, Any] = Field(default_factory=dict)
     audit_trails: list[dict[str, Any]] = Field(default_factory=list)

@@ -3,7 +3,10 @@ ForgeMind Data Augmentation Agent.
 
 Orchestrator for the entire augmentation pipeline. Delegates to
 the Augmentation Planner, executes strategies via the Strategy Pattern,
-validates quality, deduplicates, and returns the final augmented dataset.
+then runs the ValidationPipeline (Sanity → Quality → Dedup).
+
+Phase 2.1: Uses ValidationPipeline abstraction; reports accepted/rejected
+counts, rejection reasons, and a sample of rejected examples.
 """
 
 import logging
@@ -11,17 +14,13 @@ from dataclasses import dataclass, field
 
 from app.agents.augmentation_planner import AugmentationPlanner
 from app.agents.augmentation_strategies.base import AugmentationStrategy
-from app.agents.augmentation_strategies.deduplication_engine import (
-    DeduplicationEngine,
-    DeduplicationReport,
-)
 from app.agents.augmentation_strategies.paraphrase import ParaphraseStrategy
 from app.agents.augmentation_strategies.qa_generator import QAGeneratorStrategy
-from app.agents.augmentation_strategies.quality_validator import (
-    QualityReport,
-    QualityValidator,
-)
 from app.agents.augmentation_strategies.synthetic_sample import SyntheticSampleStrategy
+from app.agents.augmentation_strategies.validation_pipeline import (
+    ValidationPipeline,
+    ValidationPipelineReport,
+)
 from app.infrastructure.generation.base import GenerationClient
 
 logger = logging.getLogger(__name__)
@@ -41,16 +40,23 @@ class AugmentationReport:
     Full report from an augmentation run.
 
     Provides traceability for every step of the augmentation pipeline.
+    Phase 2.1: Adds accepted/rejected metrics, rejection reasons,
+    and a small sample of rejected examples for debugging.
     """
 
     original_samples: int = 0
     generated_samples: int = 0
+    accepted_samples: int = 0
+    rejected_samples: int = 0
     duplicates_removed: int = 0
     final_samples: int = 0
     quality_score: float = 0.0
     strategies_used: list[dict] = field(default_factory=list)
+    rejection_reasons: dict[str, int] = field(default_factory=dict)
+    rejected_examples: list[dict] = field(default_factory=list)
     quality_report: dict = field(default_factory=dict)
     deduplication_report: dict = field(default_factory=dict)
+    sanity_report: dict = field(default_factory=dict)
     audit_trails: list[dict] = field(default_factory=list)
 
 
@@ -61,16 +67,14 @@ class DataAugmentationAgent:
     Pipeline:
         1. Plan augmentation (Augmentation Planner)
         2. Execute strategies (Strategy Pattern)
-        3. Validate quality (QualityValidator)
-        4. Deduplicate (DeduplicationEngine)
-        5. Return augmented samples + report
+        3. Validate & filter (ValidationPipeline: Sanity → Quality → Dedup)
+        4. Return augmented samples + report
     """
 
     def __init__(self, generation_client: GenerationClient):
         self.client = generation_client
         self.planner = AugmentationPlanner()
-        self.quality_validator = QualityValidator()
-        self.deduplication_engine = DeduplicationEngine()
+        self.validation_pipeline = ValidationPipeline()
 
     def augment(
         self,
@@ -133,16 +137,11 @@ class DataAugmentationAgent:
                 "failed_count": result.failed_count,
             })
 
-        # Step 3: Quality validation
-        logger.info("Validating quality of %d generated samples", len(all_generated))
-        quality_report = self.quality_validator.validate(
-            generated_samples=all_generated,
-            original_samples=samples,
+        # Step 3: Run ValidationPipeline (Sanity → Quality → Dedup)
+        logger.info(
+            "Running validation pipeline on %d generated samples", len(all_generated)
         )
-
-        # Step 4: Deduplication
-        logger.info("Running deduplication on %d samples", len(all_generated))
-        deduplicated, dedup_report = self.deduplication_engine.deduplicate(
+        final_samples, pipeline_report = self.validation_pipeline.run(
             generated_samples=all_generated,
             original_samples=samples,
         )
@@ -151,32 +150,31 @@ class DataAugmentationAgent:
         report = AugmentationReport(
             original_samples=original_count,
             generated_samples=len(all_generated),
-            duplicates_removed=dedup_report.duplicates_removed,
-            final_samples=len(deduplicated),
-            quality_score=quality_report.quality_score,
+            accepted_samples=pipeline_report.accepted_samples,
+            rejected_samples=pipeline_report.rejected_samples,
+            duplicates_removed=pipeline_report.deduplication_report.get(
+                "duplicates_removed", 0
+            ),
+            final_samples=len(final_samples),
+            quality_score=pipeline_report.quality_score,
             strategies_used=strategies_used,
-            quality_report={
-                "semantic_similarity": quality_report.semantic_similarity,
-                "diversity_score": quality_report.diversity_score,
-                "duplicate_score": quality_report.duplicate_score,
-                "quality_score": quality_report.quality_score,
-                "flagged_low_quality": quality_report.flagged_low_quality,
-            },
-            deduplication_report={
-                "total_input": dedup_report.total_input,
-                "duplicates_removed": dedup_report.duplicates_removed,
-                "final_count": dedup_report.final_count,
-            },
+            rejection_reasons=pipeline_report.rejection_reasons,
+            rejected_examples=pipeline_report.rejected_examples,
+            quality_report=pipeline_report.quality_report,
+            deduplication_report=pipeline_report.deduplication_report,
+            sanity_report=pipeline_report.sanity_report,
             audit_trails=audit_trails,
         )
 
         logger.info(
-            "Augmentation complete: original=%d, generated=%d, deduped=%d, final=%d, quality=%.2f",
+            "Augmentation complete: original=%d, generated=%d, "
+            "accepted=%d, rejected=%d, final=%d, quality=%.2f",
             original_count,
             len(all_generated),
-            dedup_report.duplicates_removed,
-            len(deduplicated),
-            quality_report.quality_score,
+            pipeline_report.accepted_samples,
+            pipeline_report.rejected_samples,
+            len(final_samples),
+            pipeline_report.quality_score,
         )
 
-        return deduplicated, report
+        return final_samples, report
