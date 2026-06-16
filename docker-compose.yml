@@ -130,7 +130,7 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
-    command: celery -A app.workers.celery_app worker -Q forgemind.default,forgemind.analysis,forgemind.augmentation --loglevel=info --concurrency=2
+    command: ["celery", "-A", "app.workers.celery_app", "worker", "-Q", "forgemind.default,forgemind.analysis,forgemind.augmentation", "--loglevel=info", "--concurrency=2"]
 
   # ============================================
   # Ollama (Local LLM Backend — Phase 2)
