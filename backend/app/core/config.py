@@ -54,7 +54,7 @@ class Settings(BaseSettings):
 
     # Ollama (Local LLM Backend)
     ollama_base_url: str = "http://ollama:11434"
-    ollama_default_model: str = "qwen3:0.6b"
+    ollama_default_model: str = "qwen2.5:0.5b"
 
 
 @lru_cache
