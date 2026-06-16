@@ -38,11 +38,12 @@ def main():
     with open(csv_path, "rb") as f:
         resp = requests.post(f"{BASE_URL}/datasets/upload", files={"file": f})
     
-    if resp.status_code != 202:
-        print(f"Upload failed: {resp.text}")
+    if resp.status_code not in (200, 201, 202):
+        print(f"Upload failed: {resp.status_code} - {resp.text}")
         sys.exit(1)
         
-    dataset_id = resp.json()["id"]
+    data = resp.json()
+    dataset_id = data.get("dataset_id") or data.get("id")
     print(f"Dataset ID: {dataset_id}")
 
     # 3. Wait for Analysis to complete
