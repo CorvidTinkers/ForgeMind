@@ -9,6 +9,12 @@ BASE_URL = "http://localhost:8000/api/v1"
 def print_header(text):
     print(f"\n{'='*50}\n{text}\n{'='*50}")
 
+# Statuses that mean the pipeline is actively running (not stuck)
+ACTIVE_STATUSES = {
+    "uploaded", "validating", "validated", "fingerprinting", "fingerprinted", "analyzing",
+    "pending", "running", "building"
+}
+
 def wait_for_status(url, target_status, max_retries=60):
     for i in range(max_retries):
         resp = requests.get(url)
@@ -18,8 +24,8 @@ def wait_for_status(url, target_status, max_retries=60):
             print(f"Current status: {status}")
             if status == target_status:
                 return data
-            if status == "failed":
-                print(f"Task failed: {json.dumps(data, indent=2)}")
+            if status == "failed" or (status not in ACTIVE_STATUSES and status != target_status):
+                print(f"Task failed or entered unexpected status: {json.dumps(data, indent=2)}")
                 sys.exit(1)
         time.sleep(2)
     print("Timed out waiting for status change.")
@@ -46,11 +52,19 @@ def main():
     dataset_id = data.get("dataset_id") or data.get("id")
     print(f"Dataset ID: {dataset_id}")
 
-    # 3. Wait for Analysis to complete
+    # 3. Explicitly trigger analysis (in case the worker didn't auto-pick it up)
+    print("\nTriggering Phase 1 analysis...")
+    resp = requests.post(f"{BASE_URL}/datasets/analyze/{dataset_id}")
+    if resp.status_code not in (200, 201, 202, 409):  # 409 = already processing, that's fine
+        print(f"Analyze trigger failed: {resp.status_code} - {resp.text}")
+        sys.exit(1)
+    print(f"Analysis triggered: {resp.json().get('message', resp.json().get('status', 'ok'))}")
+
+    # 4. Wait for Analysis to complete
     print("\nWaiting for Phase 1 to finish (Status: 'analyzed')...")
     wait_for_status(f"{BASE_URL}/datasets/{dataset_id}", "analyzed")
 
-    # 4. Trigger Phase 2 (Augmentation)
+    # 5. Trigger Phase 2 (Augmentation)
     print("\nTriggering Phase 2 (Data Augmentation)...")
     resp = requests.post(f"{BASE_URL}/datasets/{dataset_id}/augment")
     if resp.status_code != 202:
@@ -60,17 +74,17 @@ def main():
     run_id = resp.json()["run_id"]
     print(f"Augmentation Run ID: {run_id}")
 
-    # 5. Wait for Augmentation to complete
+    # 6. Wait for Augmentation to complete
     print("\nWaiting for Phase 2 to finish (this requires Ollama to generate data)...")
     wait_for_status(f"{BASE_URL}/augmentation/{run_id}", "completed", max_retries=120)
 
-    # 6. Fetch the report
+    # 7. Fetch the report
     print("\nFetching Augmentation Report...")
     resp = requests.get(f"{BASE_URL}/augmentation/{run_id}/report")
     report = resp.json()
     print(json.dumps(report, indent=2))
 
-    # 7. Download Final Alpaca Dataset
+    # 8. Download Final Alpaca Dataset
     print("\nDownloading Final Training Dataset (Alpaca JSON)...")
     resp = requests.get(f"{BASE_URL}/training-dataset/{dataset_id}/download?format=alpaca&file_format=json")
     if resp.status_code == 200:

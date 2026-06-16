@@ -36,13 +36,13 @@ async def get_training_dataset(
     """Get metadata for a training dataset."""
     training_ds = (
         db.query(TrainingDataset)
-        .filter(TrainingDataset.id == dataset_id)
+        .filter(TrainingDataset.dataset_id == dataset_id)
         .first()
     )
     if training_ds is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Training dataset {dataset_id} not found.",
+            detail=f"Training dataset for dataset {dataset_id} not found.",
         )
 
     return TrainingDatasetResponse(
@@ -81,13 +81,13 @@ async def download_training_dataset(
     # Find training dataset
     training_ds = (
         db.query(TrainingDataset)
-        .filter(TrainingDataset.id == dataset_id)
+        .filter(TrainingDataset.dataset_id == dataset_id)
         .first()
     )
     if training_ds is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Training dataset {dataset_id} not found.",
+            detail=f"Training dataset for dataset {dataset_id} not found.",
         )
 
     records = training_ds.records or []

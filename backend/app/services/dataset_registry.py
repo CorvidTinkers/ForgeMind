@@ -35,6 +35,9 @@ class DatasetRegistryService:
         """
         Register a new version of a dataset.
 
+        Idempotent: if (dataset_id, version) already exists, returns the
+        existing record without raising an error.
+
         Args:
             dataset_id: The dataset to version.
             version: Semantic version string.
@@ -42,8 +45,25 @@ class DatasetRegistryService:
             changelog: Description of what changed.
 
         Returns:
-            The created DatasetVersion record.
+            The created (or existing) DatasetVersion record.
         """
+        # Check for existing version first to avoid UniqueViolation on retries
+        existing = (
+            self.db.query(DatasetVersion)
+            .filter(
+                DatasetVersion.dataset_id == dataset_id,
+                DatasetVersion.version == version,
+            )
+            .first()
+        )
+        if existing is not None:
+            logger.info(
+                "Version %s for dataset %s already exists, skipping registration",
+                version,
+                dataset_id,
+            )
+            return existing
+
         dataset_version = DatasetVersion(
             dataset_id=dataset_id,
             version=version,
