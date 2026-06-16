@@ -1,72 +1,57 @@
 [
   {
     "input": "",
-    "output": "Gravitational forces act between celestial bodies such as planets, stars, and galaxies. Examples include the attraction between Earth and the Moon or the pull between Earth and a person.",
-    "instruction": "What are some examples of gravitational forces?"
+    "output": "The first computer was invented by Charles Babbage in 1843.",
+    "instruction": "Who invented computers?"
   },
   {
     "input": "",
-    "output": "AI has revolutionized various fields such as image and speech recognition, natural language processing, autonomous driving, robotics, and more.",
-    "instruction": "What are the applications of AI in modern technologies?"
+    "output": "Machine learning was invented by Arthur Samuel in his 1957 paper 'An Experiment with Artificial Intelligence' and later popularized by John McCarthy in 1962.",
+    "instruction": "Who invented machine learning?"
   },
   {
     "input": "",
-    "output": "The two main forces that keep planets in orbit around their stars are gravity and the solar wind.",
-    "instruction": "What are the two main forces that keep planets in orbit around their stars?"
+    "output": "The creators of the latest AI research include researchers and institutions from various domains such as computer science, mathematics, neuroscience, and artificial intelligence.",
+    "instruction": "Who are the creators of the latest AI research?"
   },
   {
     "input": "",
-    "output": "ARPANET was the first network to break through and make the internet possible.",
+    "output": "Gravitational acceleration is approximately 9.81 meters per second squared.",
+    "instruction": "What is the formula for gravitational acceleration?"
+  },
+  {
+    "input": "",
+    "output": "AI focuses on developing computers that can perform tasks such as speech recognition, image processing, natural language processing, etc., while traditional computing primarily includes hardware like CPUs, GPUs, and other specialized components.",
+    "instruction": "What are the main differences between AI and traditional computing?"
+  },
+  {
+    "input": "",
+    "output": "Alan Turing",
+    "instruction": "Who invented computer programming?"
+  },
+  {
+    "input": "",
+    "output": "The internet was invented by several individuals.",
     "instruction": "Who invented the internet?"
   },
   {
     "input": "",
-    "output": "Recent advancements in AI involve improved processing power, increased storage capacity, and faster computation speeds compared to previous generations.",
-    "instruction": "AI has become more advanced in recent years."
+    "output": "AI has been developed and implemented in various fields such as natural language processing, robotics, computer vision, healthcare, finance, etc.",
+    "instruction": "What are some common characteristics of AI?"
   },
   {
     "input": "",
-    "output": "Quantum computing uses qubits instead of classical bits to perform operations, which allows for faster and more efficient computation.",
-    "instruction": "What are the main differences between traditional and quantum computing?"
+    "output": "Computer vision involves the ability of machines to see and understand images and videos.",
+    "instruction": "What is computer vision?"
   },
   {
     "input": "",
-    "output": "Quantum physics is the branch of physics that deals with the behavior of matter and energy at extremely small scales, such as atoms and molecules.",
-    "instruction": "What is quantum physics?"
+    "output": "AI has many applications in various fields such as autonomous driving, smart homes, facial recognition, and more.",
+    "instruction": "What are the main technologies of AI?"
   },
   {
     "input": "",
-    "output": "AI has been used in various applications such as image and speech recognition, natural language processing, predictive analytics, autonomous vehicles, robotics, and more.",
-    "instruction": "What are some examples of AI?"
-  },
-  {
-    "input": "",
-    "output": "Artificial intelligence (AI) refers to the ability of machines to perform tasks that would normally require human intelligence, such as visual perception, speech recognition, decision-making, and language translation.",
-    "instruction": "What are some examples of artificial intelligence?"
-  },
-  {
-    "input": "",
-    "output": "Artificial intelligence has been applied in various fields such as healthcare, transportation, manufacturing, finance, and more.",
-    "instruction": "What are some common applications of artificial intelligence?"
-  },
-  {
-    "input": "",
-    "output": "Quantum computing is an area of computer science that uses quantum mechanics to perform calculations and processes in ways that are not possible with classical computers. It differs from classical computing by using qubits, which allow for faster computation through entanglement and superposition.",
-    "instruction": "Who is quantum computing? How does it differ from classical computing?"
-  },
-  {
-    "input": "",
-    "output": "Quantum computing is a subset of computer science that deals with quantum mechanics and uses quantum bits (qubits) instead of classical bits to perform operations.",
-    "instruction": "Who is quantum computing?"
-  },
-  {
-    "input": "",
-    "output": "Computers are machines that can process information and perform tasks.",
-    "instruction": "Who are computers?"
-  },
-  {
-    "input": "",
-    "output": "AI has revolutionized many aspects of healthcare, including image analysis, personalized treatment plans, predictive analytics for medical conditions, and drug discovery.",
-    "instruction": "What are the applications of AI in healthcare?"
+    "output": "Machine learning is a subset of artificial intelligence that involves the use of algorithms and statistical models to enable machines to learn from data and make predictions or decisions.",
+    "instruction": "What is machine learning?"
   }
 ]

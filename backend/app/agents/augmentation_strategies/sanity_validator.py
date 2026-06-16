@@ -109,8 +109,16 @@ class InstructionSanityValidator:
             if not instruction:
                 # No instruction field found; check other text fields
                 result = self._check_generic_text(sample)
+                logger.debug(
+                    "Sanity check (generic): sample_keys=%s, is_valid=%s, reason=%s",
+                    list(sample.keys()), result.is_valid, result.reason,
+                )
             else:
                 result = self._check_instruction(instruction)
+                logger.debug(
+                    "Sanity check: instruction=%r, is_valid=%s, reason=%s",
+                    instruction[:80], result.is_valid, result.reason,
+                )
 
             if result.is_valid:
                 valid.append(sample)
@@ -153,21 +161,26 @@ class InstructionSanityValidator:
 
         # Check 1: Minimum length
         if len(text.strip()) < _MIN_INSTRUCTION_LENGTH:
+            logger.debug("REJECT (too_short): %r", text[:80])
             return SanityResult(is_valid=False, reason="too_short")
 
         # Check 2: Excessive word repetition
         if self._has_excessive_repetition(text):
+            logger.debug("REJECT (garbled_repetition): %r", text[:80])
             return SanityResult(is_valid=False, reason="garbled_repetition")
 
         # Check 3: Interrogative-subject agreement
         who_result = self._check_who_agreement(text)
         if not who_result.is_valid:
+            logger.debug("REJECT (%s): %r", who_result.reason, text[:80])
             return who_result
 
         # Check 4: Must be interrogative or imperative
         if self._is_purely_declarative(text):
+            logger.debug("REJECT (declarative_not_instruction): %r", text[:80])
             return SanityResult(is_valid=False, reason="declarative_not_instruction")
 
+        logger.debug("ACCEPT: %r", text[:80])
         return SanityResult(is_valid=True)
 
     def _check_generic_text(self, sample: dict) -> SanityResult:

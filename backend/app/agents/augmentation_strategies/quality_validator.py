@@ -143,6 +143,11 @@ class QualityValidator:
                     rejected.append(sample)
                     reason = "low_semantic_similarity"
                     rejection_reasons[reason] = rejection_reasons.get(reason, 0) + 1
+                    logger.debug(
+                        "Quality REJECT: idx=%d, max_sim=%.4f, threshold=%.4f, sample=%s",
+                        idx, max_sim, similarity_threshold,
+                        str({k: v for k, v in sample.items() if isinstance(v, str)})[:120],
+                    )
                     if len(rejected_examples) < self.MAX_REJECTED_EXAMPLES:
                         rejected_examples.append({
                             "sample": {
@@ -153,6 +158,11 @@ class QualityValidator:
                             "similarity": round(max_sim, 4),
                         })
                 else:
+                    logger.debug(
+                        "Quality ACCEPT: idx=%d, max_sim=%.4f, sample=%s",
+                        idx, max_sim,
+                        str({k: v for k, v in sample.items() if isinstance(v, str)})[:120],
+                    )
                     accepted.append(sample)
         else:
             accepted = list(generated_samples)
