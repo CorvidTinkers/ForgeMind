@@ -53,8 +53,8 @@ class Settings(BaseSettings):
     mlflow_tracking_uri: str = "http://mlflow:5000"
 
     # Ollama (Local LLM Backend)
-    ollama_base_url: str = "http://ollama:11434"
-    ollama_default_model: str = "qwen2.5:0.5b"
+    ollama_base_url: str = "http://host.docker.internal:11434"
+    ollama_default_model: str = "qwen2.5:7b"
 
 
 @lru_cache
